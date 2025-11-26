@@ -13,6 +13,9 @@ from .patchtst_model import PatchTSTTimeSeriesModel
 from .itransformer_model import iTransformerTimeSeriesModel
 from .timesnet_model import TimesNetTimeSeriesModel
 
+# Hybrid models (Combining multiple approaches)
+from .hybrid_chronos_patchtst import HybridChronosPatchTSTModel
+
 __all__ = [
     # Tree-based
     'XGBoostTimeSeriesModel',
@@ -31,5 +34,7 @@ __all__ = [
     # Transformers
     'PatchTSTTimeSeriesModel',
     'iTransformerTimeSeriesModel',
-    'TimesNetTimeSeriesModel'
+    'TimesNetTimeSeriesModel',
+    # Hybrid
+    'HybridChronosPatchTSTModel'
 ]
