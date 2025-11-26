@@ -24,13 +24,15 @@ class TimeSeriesPreprocessor:
         elif scaler_type == 'minmax':
             self.scaler = MinMaxScaler()
 
-    def load_data(self, train_path: str, test_path: Optional[str] = None) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
+    def load_data(self, train_path: str, test_path: Optional[str] = None,
+                  date_is_numeric: bool = True) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
         """
         Load training and test data
 
         Args:
             train_path: Path to training CSV
             test_path: Path to test CSV (optional)
+            date_is_numeric: If True, date column is numeric ID; if False, parse as datetime
 
         Returns:
             Tuple of (train_df, test_df)
@@ -38,14 +40,24 @@ class TimeSeriesPreprocessor:
         train_df = pd.read_csv(train_path)
         test_df = pd.read_csv(test_path) if test_path else None
 
-        # Parse date column if exists
+        # Handle date column
         if 'date' in train_df.columns:
-            train_df['date'] = pd.to_datetime(train_df['date'])
-            train_df = train_df.sort_values('date').reset_index(drop=True)
+            if date_is_numeric:
+                # Date is a numeric ID - ensure it's integer type
+                train_df['date'] = train_df['date'].astype(int)
+                train_df = train_df.sort_values('date').reset_index(drop=True)
+            else:
+                # Date is actual datetime - parse it
+                train_df['date'] = pd.to_datetime(train_df['date'])
+                train_df = train_df.sort_values('date').reset_index(drop=True)
 
         if test_df is not None and 'date' in test_df.columns:
-            test_df['date'] = pd.to_datetime(test_df['date'])
-            test_df = test_df.sort_values('date').reset_index(drop=True)
+            if date_is_numeric:
+                test_df['date'] = test_df['date'].astype(int)
+                test_df = test_df.sort_values('date').reset_index(drop=True)
+            else:
+                test_df['date'] = pd.to_datetime(test_df['date'])
+                test_df = test_df.sort_values('date').reset_index(drop=True)
 
         return train_df, test_df
 
@@ -86,31 +98,69 @@ class TimeSeriesPreprocessor:
             df_copy[f'{target_col}_rolling_max_{window}'] = df_copy[target_col].rolling(window=window).max()
         return df_copy
 
-    def create_time_features(self, df: pd.DataFrame, date_col: str = 'date') -> pd.DataFrame:
+    def create_time_features(self, df: pd.DataFrame, date_col: str = 'date',
+                            date_is_numeric: bool = True) -> pd.DataFrame:
         """
         Create time-based features
 
         Args:
             df: Input dataframe
             date_col: Name of date column
+            date_is_numeric: If True, date is numeric ID; if False, it's datetime
 
         Returns:
             DataFrame with time features
         """
         df_copy = df.copy()
         if date_col in df_copy.columns:
-            df_copy['year'] = df_copy[date_col].dt.year
-            df_copy['month'] = df_copy[date_col].dt.month
-            df_copy['day'] = df_copy[date_col].dt.day
-            df_copy['dayofweek'] = df_copy[date_col].dt.dayofweek
-            df_copy['quarter'] = df_copy[date_col].dt.quarter
-            df_copy['dayofyear'] = df_copy[date_col].dt.dayofyear
-            df_copy['weekofyear'] = df_copy[date_col].dt.isocalendar().week
+            if date_is_numeric:
+                # Date is a numeric ID - create cyclic and positional features
+                # Normalize date to [0, 1] range for the dataset
+                date_min = df_copy[date_col].min()
+                date_max = df_copy[date_col].max()
+                date_range = date_max - date_min
+
+                if date_range > 0:
+                    # Normalized date position
+                    df_copy['date_normalized'] = (df_copy[date_col] - date_min) / date_range
+
+                    # Cyclic features assuming different periodicities
+                    # Weekly pattern (assuming data has weekly periodicity)
+                    df_copy['day_of_week_sin'] = np.sin(2 * np.pi * df_copy[date_col] / 7)
+                    df_copy['day_of_week_cos'] = np.cos(2 * np.pi * df_copy[date_col] / 7)
+
+                    # Monthly pattern (assuming ~30 day months)
+                    df_copy['day_of_month_sin'] = np.sin(2 * np.pi * df_copy[date_col] / 30)
+                    df_copy['day_of_month_cos'] = np.cos(2 * np.pi * df_copy[date_col] / 30)
+
+                    # Yearly pattern (assuming ~365 days)
+                    df_copy['day_of_year_sin'] = np.sin(2 * np.pi * df_copy[date_col] / 365)
+                    df_copy['day_of_year_cos'] = np.cos(2 * np.pi * df_copy[date_col] / 365)
+
+                    # Quarter of year (assuming ~90 day quarters)
+                    df_copy['quarter_sin'] = np.sin(2 * np.pi * df_copy[date_col] / 90)
+                    df_copy['quarter_cos'] = np.cos(2 * np.pi * df_copy[date_col] / 90)
+                else:
+                    # Single date value - set all to 0
+                    df_copy['date_normalized'] = 0
+                    for col in ['day_of_week', 'day_of_month', 'day_of_year', 'quarter']:
+                        df_copy[f'{col}_sin'] = 0
+                        df_copy[f'{col}_cos'] = 0
+            else:
+                # Date is datetime - extract standard datetime features
+                df_copy['year'] = df_copy[date_col].dt.year
+                df_copy['month'] = df_copy[date_col].dt.month
+                df_copy['day'] = df_copy[date_col].dt.day
+                df_copy['dayofweek'] = df_copy[date_col].dt.dayofweek
+                df_copy['quarter'] = df_copy[date_col].dt.quarter
+                df_copy['dayofyear'] = df_copy[date_col].dt.dayofyear
+                df_copy['weekofyear'] = df_copy[date_col].dt.isocalendar().week
         return df_copy
 
     def create_all_features(self, df: pd.DataFrame, target_col: str,
                            lags: List[int] = [1, 2, 3, 5, 7, 14, 21, 30],
-                           windows: List[int] = [7, 14, 30, 60]) -> pd.DataFrame:
+                           windows: List[int] = [7, 14, 30, 60],
+                           date_is_numeric: bool = True) -> pd.DataFrame:
         """
         Create all features for time series modeling
 
@@ -119,6 +169,7 @@ class TimeSeriesPreprocessor:
             target_col: Name of target column
             lags: List of lag values
             windows: List of rolling window sizes
+            date_is_numeric: If True, date column is numeric ID; if False, it's datetime
 
         Returns:
             DataFrame with all features
@@ -126,7 +177,7 @@ class TimeSeriesPreprocessor:
         df_features = df.copy()
 
         # Time features
-        df_features = self.create_time_features(df_features)
+        df_features = self.create_time_features(df_features, date_is_numeric=date_is_numeric)
 
         # Lag features
         df_features = self.create_lag_features(df_features, target_col, lags)
