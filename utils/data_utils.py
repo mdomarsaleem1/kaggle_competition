@@ -49,9 +49,15 @@ class TimeSeriesPreprocessor:
         test_file = Path(test_path) if test_path else None
 
         if not train_file.is_absolute():
-            train_file = DEFAULT_DATA_ROOT / train_file
+            if train_file.parts and train_file.parts[0] == DEFAULT_DATA_ROOT.name:
+                train_file = Path.cwd() / train_file
+            else:
+                train_file = DEFAULT_DATA_ROOT / train_file
         if test_file and not test_file.is_absolute():
-            test_file = DEFAULT_DATA_ROOT / test_file
+            if test_file.parts and test_file.parts[0] == DEFAULT_DATA_ROOT.name:
+                test_file = Path.cwd() / test_file
+            else:
+                test_file = DEFAULT_DATA_ROOT / test_file
 
         train_df = pd.read_csv(train_file)
         test_df = pd.read_csv(test_file) if test_file else None
