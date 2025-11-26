@@ -1,10 +1,14 @@
 """
 Data loading and preprocessing utilities for Hull Tactical Market Prediction
 """
+from pathlib import Path
+from typing import List, Optional, Tuple
+
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from typing import Tuple, Optional, List
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
+
+from .catalog import DEFAULT_DATA_ROOT
 
 
 class TimeSeriesPreprocessor:
@@ -24,8 +28,12 @@ class TimeSeriesPreprocessor:
         elif scaler_type == 'minmax':
             self.scaler = MinMaxScaler()
 
-    def load_data(self, train_path: str, test_path: Optional[str] = None,
-                  date_is_numeric: bool = True) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
+    def load_data(
+        self,
+        train_path: str,
+        test_path: Optional[str] = None,
+        date_is_numeric: bool = True,
+    ) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
         """
         Load training and test data
 
@@ -37,8 +45,16 @@ class TimeSeriesPreprocessor:
         Returns:
             Tuple of (train_df, test_df)
         """
-        train_df = pd.read_csv(train_path)
-        test_df = pd.read_csv(test_path) if test_path else None
+        train_file = Path(train_path)
+        test_file = Path(test_path) if test_path else None
+
+        if not train_file.is_absolute():
+            train_file = DEFAULT_DATA_ROOT / train_file
+        if test_file and not test_file.is_absolute():
+            test_file = DEFAULT_DATA_ROOT / test_file
+
+        train_df = pd.read_csv(train_file)
+        test_df = pd.read_csv(test_file) if test_file else None
 
         # Handle date column
         if 'date' in train_df.columns:

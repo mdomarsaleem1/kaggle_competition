@@ -1,0 +1,24 @@
+# Minimal Kedro-inspired catalog for local development
+train_raw:
+  type: pandas.CSVDataSet
+  filepath: data/01_raw/train.csv
+
+test_raw:
+  type: pandas.CSVDataSet
+  filepath: data/01_raw/test.csv
+
+clean_train:
+  type: pandas.ParquetDataSet
+  filepath: data/02_interim/clean_train.parquet
+
+model_matrix:
+  type: pandas.ParquetDataSet
+  filepath: data/03_processed/model_matrix.parquet
+
+oof_predictions:
+  type: pandas.ParquetDataSet
+  filepath: data/03_processed/oof_predictions.parquet
+
+submission:
+  type: pandas.CSVDataSet
+  filepath: data/04_models/submission.csv

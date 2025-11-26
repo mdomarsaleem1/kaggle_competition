@@ -1,11 +1,12 @@
 """Chronological cross-validation helpers for time series models."""
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import Callable, List, Optional, Sequence, Tuple
 
 import pandas as pd
 from sklearn.model_selection import TimeSeriesSplit
 
+from .metrics import averaged_metric, hull_sharpe_ratio
 
 @dataclass
 class TimeSeriesFold:
@@ -99,3 +100,49 @@ def save_folds_to_disk(folds: List[TimeSeriesFold], output_dir: str) -> None:
             f"Saved fold {fold.fold_id}: train -> {train_file.name} "
             f"({fold.train_range}), test -> {test_file.name} ({fold.test_range})"
         )
+
+
+def evaluate_time_series_model(
+    X: pd.DataFrame,
+    y: pd.Series,
+    estimator_factory: Callable[[], object],
+    n_splits: int = 10,
+    date_col: Optional[str] = "date",
+    metric: Callable[[Sequence[float], Sequence[float]], float] = hull_sharpe_ratio,
+    test_size: Optional[int] = None,
+) -> Tuple[float, List[float]]:
+    """Run centralized chronological cross-validation for a model.
+
+    Args:
+        X: Feature matrix sorted by ``date_col``.
+        y: Target vector aligned with ``X``.
+        estimator_factory: Zero-argument callable returning an unfitted estimator.
+        n_splits: Number of chronological folds (defaults to 10).
+        date_col: Optional date column name used to sort the data.
+        metric: Scoring function where higher is better.
+        test_size: Optional explicit test window size for ``TimeSeriesSplit``.
+
+    Returns:
+        Tuple of the averaged metric across folds and the list of per-fold scores.
+    """
+
+    df = X.copy()
+    df["__target__"] = y.values
+    sorted_df = _sort_by_date(df, date_col)
+
+    features = sorted_df.drop(columns=["__target__"])
+    target = sorted_df["__target__"]
+
+    splitter = TimeSeriesSplit(n_splits=n_splits, test_size=test_size)
+    fold_scores: List[float] = []
+
+    for train_idx, test_idx in splitter.split(features):
+        estimator = estimator_factory()
+        X_train, X_test = features.iloc[train_idx], features.iloc[test_idx]
+        y_train, y_test = target.iloc[train_idx], target.iloc[test_idx]
+
+        estimator.fit(X_train, y_train)
+        preds = estimator.predict(X_test)
+        fold_scores.append(metric(y_test, preds))
+
+    return averaged_metric(fold_scores), fold_scores
