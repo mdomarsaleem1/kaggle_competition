@@ -299,8 +299,19 @@ class UniversalNestedEnsemble:
             if i < len(importance):
                 print(f"  {model_name:15s}: {importance[i]:.4f}")
 
+    def _build_sequential_matrix(self, df: pd.DataFrame, target_col: str, date_col: Optional[str]) -> np.ndarray:
+        """Create sequential matrix with numeric date indices."""
+        target_values = df[target_col].values.reshape(-1, 1)
+
+        if date_col and date_col in df.columns:
+            date_numeric = df[date_col].dt.toordinal().values.reshape(-1, 1)
+            return np.hstack([target_values, date_numeric])
+
+        return target_values
+
     def train(self, full_data: pd.DataFrame, target_col: str = 'target',
-             val_split: float = 0.3, preprocessor: Optional[TimeSeriesPreprocessor] = None) -> Dict:
+             val_split: float = 0.3, preprocessor: Optional[TimeSeriesPreprocessor] = None,
+             date_col: str = 'date') -> Dict:
         """
         Train universal ensemble
 
@@ -322,13 +333,9 @@ class UniversalNestedEnsemble:
         print(f"  Training: {len(train_df)} samples")
         print(f"  Validation: {len(val_df)} samples")
 
-        # Prepare sequential data for transformers
-        train_sequential = train_df[target_col].values
-        val_sequential = val_df[target_col].values
-
-        if train_sequential.ndim == 1:
-            train_sequential = train_sequential.reshape(-1, 1)
-            val_sequential = val_sequential.reshape(-1, 1)
+        # Prepare sequential data for transformers using numeric date index
+        train_sequential = self._build_sequential_matrix(train_df, target_col, date_col)
+        val_sequential = self._build_sequential_matrix(val_df, target_col, date_col)
 
         # Prepare tabular data for tree models
         X_train_tabular, y_train, X_val_tabular, y_val = None, None, None, None
@@ -508,7 +515,8 @@ def main():
         train_df,
         target_col=args.target_col,
         val_split=args.val_split,
-        preprocessor=preprocessor if not args.no_tree_models else None
+        preprocessor=preprocessor if not args.no_tree_models else None,
+        date_col=args.date_col
     )
 
     # Save

@@ -133,6 +133,15 @@ class UltimateMetaEnsemble:
         print(f"Device: {self.device}")
         print("="*70)
 
+    def _build_sequential_matrix(self, df: pd.DataFrame, target_col: str, date_col: Optional[str]) -> np.ndarray:
+        """Create sequential matrix that uses numeric date indices instead of datetime objects."""
+        target_values = df[target_col].values.reshape(-1, 1)
+
+        if date_col and date_col in df.columns:
+            date_numeric = df[date_col].dt.toordinal().values.reshape(-1, 1)
+            return np.hstack([target_values, date_numeric])
+
+        return target_values
     def _create_meta_learner(self):
         """Create meta-learner"""
         if self.meta_learner_type == 'xgboost':
@@ -451,7 +460,8 @@ class UltimateMetaEnsemble:
                 print(f"  {model_name:25s}: {importance[i]:.4f}")
 
     def train(self, full_data: pd.DataFrame, target_col: str = 'target',
-             val_split: float = 0.3, preprocessor: Optional[TimeSeriesPreprocessor] = None) -> Dict:
+             val_split: float = 0.3, preprocessor: Optional[TimeSeriesPreprocessor] = None,
+             date_col: str = 'date') -> Dict:
         """
         Train the complete ultimate ensemble
 
@@ -473,13 +483,9 @@ class UltimateMetaEnsemble:
         print(f"  Training: {len(train_df)} samples")
         print(f"  Validation: {len(val_df)} samples")
 
-        # Prepare sequential data
-        train_sequential = train_df[target_col].values
-        val_sequential = val_df[target_col].values
-
-        if train_sequential.ndim == 1:
-            train_sequential = train_sequential.reshape(-1, 1)
-            val_sequential = val_sequential.reshape(-1, 1)
+        # Prepare sequential data using numeric date index for transformer-style models
+        train_sequential = self._build_sequential_matrix(train_df, target_col, date_col)
+        val_sequential = self._build_sequential_matrix(val_df, target_col, date_col)
 
         # Prepare tabular data for tree models
         X_train_tabular, y_train, X_val_tabular, y_val = None, None, None, None
@@ -599,6 +605,7 @@ def main():
     parser.add_argument('--data-dir', type=str, default='data')
     parser.add_argument('--train-file', type=str, default='train.csv')
     parser.add_argument('--target-col', type=str, default='target')
+    parser.add_argument('--date-col', type=str, default='date')
     parser.add_argument('--output-dir', type=str, default='ultimate_ensemble_models')
     parser.add_argument('--seq-len', type=int, default=96)
     parser.add_argument('--pred-len', type=int, default=24)
@@ -639,7 +646,8 @@ def main():
         train_df,
         target_col=args.target_col,
         val_split=args.val_split,
-        preprocessor=preprocessor if not args.no_trees else None
+        preprocessor=preprocessor if not args.no_trees else None,
+        date_col=args.date_col
     )
 
     # Save
