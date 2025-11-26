@@ -14,13 +14,16 @@ Level 0B: Transformer Models (3)
 ├── iTransformer
 └── TimesNet
 
-Level 0C: Hybrid Models (1)
+Level 0C: Foundation Models (1)
+└── TimesFM (Google's pre-trained foundation model)
+
+Level 0D: Hybrid Models (1)
 └── Chronos-PatchTST (with covariate injection)
 
 Level 1: Meta-Learner
-└── XGBoost/Ridge (learns to combine ALL 7 base predictions)
+└── XGBoost/Ridge (learns to combine ALL base predictions)
 
-Total: 7 diverse models → 1 powerful prediction
+Total: 8+ diverse models → 1 powerful prediction
 """
 import sys
 import os
@@ -46,6 +49,8 @@ from models import (
     PatchTSTTimeSeriesModel,
     iTransformerTimeSeriesModel,
     TimesNetTimeSeriesModel,
+    # Foundation
+    TimesFMTimeSeriesModel,
     # Hybrid
     HybridChronosPatchTSTModel
 )
@@ -71,6 +76,7 @@ class UltimateMetaEnsemble:
                  meta_learner_type: str = 'xgboost',
                  include_tree_models: bool = True,
                  include_transformers: bool = True,
+                 include_foundation: bool = True,
                  include_hybrid: bool = True,
                  device: Optional[str] = None):
         """
@@ -83,6 +89,7 @@ class UltimateMetaEnsemble:
             meta_learner_type: 'xgboost' or 'ridge'
             include_tree_models: Include tree-based models
             include_transformers: Include transformer models
+            include_foundation: Include foundation models (TimesFM)
             include_hybrid: Include hybrid Chronos-PatchTST
             device: Device for deep learning models
         """
@@ -95,12 +102,14 @@ class UltimateMetaEnsemble:
         # Model containers
         self.tree_models = {}
         self.transformer_models = {}
+        self.foundation_models = {}
         self.hybrid_model = None
         self.meta_learner = None
 
         # Configuration
         self.include_tree_models = include_tree_models
         self.include_transformers = include_transformers
+        self.include_foundation = include_foundation
         self.include_hybrid = include_hybrid
 
         # Model names
@@ -109,6 +118,8 @@ class UltimateMetaEnsemble:
             self.all_model_names.extend(['xgboost', 'lightgbm', 'catboost'])
         if include_transformers:
             self.all_model_names.extend(['patchtst', 'itransformer', 'timesnet'])
+        if include_foundation:
+            self.all_model_names.append('timesfm')
         if include_hybrid:
             self.all_model_names.append('hybrid_chronos_patchtst')
 
@@ -241,13 +252,43 @@ class UltimateMetaEnsemble:
 
         return metrics
 
+    def train_foundation_models(self, train_data: np.ndarray, val_data: np.ndarray) -> Dict:
+        """Train foundation models (TimesFM)"""
+        if not self.include_foundation:
+            return {}
+
+        print("\n" + "="*70)
+        print("LEVEL 0C: Training Foundation Models")
+        print("="*70)
+
+        metrics = {}
+
+        # TimesFM
+        print("\n[1/1] Loading TimesFM (pre-trained)...")
+        timesfm = TimesFMTimeSeriesModel(
+            seq_len=self.seq_len,
+            pred_len=self.pred_len,
+            model_size='base',
+            device=self.device
+        )
+
+        # TimesFM is pre-trained, so we just "load" it (evaluation on val_data)
+        timesfm_metrics = timesfm.train(train_data, val_data, verbose=False)
+        self.foundation_models['timesfm'] = timesfm
+        metrics['timesfm'] = timesfm_metrics
+        print(f"  TimesFM loaded (pre-trained foundation model)")
+        if 'val_rmse' in timesfm_metrics:
+            print(f"  Val RMSE: {timesfm_metrics['val_rmse']:.6f}")
+
+        return metrics
+
     def train_hybrid_model(self, train_data: np.ndarray, val_data: np.ndarray) -> Dict:
         """Train hybrid Chronos-PatchTST model"""
         if not self.include_hybrid:
             return {}
 
         print("\n" + "="*70)
-        print("LEVEL 0C: Training Hybrid Chronos-PatchTST Model")
+        print("LEVEL 0D: Training Hybrid Chronos-PatchTST Model")
         print("="*70)
 
         n_features = train_data.shape[1] if train_data.ndim > 1 else 1
@@ -296,6 +337,30 @@ class UltimateMetaEnsemble:
                     if pred.ndim > 1:
                         pred = pred.mean(axis=1) if pred.shape[1] > 1 else pred[:, 0]
                     all_predictions.append(pred)
+
+        # Foundation model predictions
+        if self.include_foundation and sequential_data is not None:
+            for name in ['timesfm']:
+                if name in self.foundation_models:
+                    # Use only the last seq_len points for foundation model
+                    context = sequential_data[-self.seq_len:]
+                    if context.ndim == 1:
+                        context = context.reshape(-1, 1)
+
+                    try:
+                        timesfm_pred = self.foundation_models[name].predict(context)
+                        # Repeat prediction for all samples if needed
+                        if len(all_predictions) > 0:
+                            target_len = len(all_predictions[0])
+                            if len(timesfm_pred) != target_len:
+                                timesfm_pred_repeated = np.full(target_len, timesfm_pred[0] if hasattr(timesfm_pred, '__len__') else timesfm_pred)
+                                all_predictions.append(timesfm_pred_repeated)
+                            else:
+                                all_predictions.append(timesfm_pred)
+                        else:
+                            all_predictions.append(timesfm_pred)
+                    except Exception as e:
+                        print(f"Warning: TimesFM prediction failed: {e}")
 
         # Hybrid model predictions
         if self.include_hybrid and self.hybrid_model and sequential_data is not None:
@@ -436,6 +501,7 @@ class UltimateMetaEnsemble:
         # Train all base models
         tree_metrics = self.train_tree_models(X_train_tabular, y_train, X_val_tabular, y_val)
         transformer_metrics = self.train_transformer_models(train_sequential, val_sequential)
+        foundation_metrics = self.train_foundation_models(train_sequential, val_sequential)
         hybrid_metrics = self.train_hybrid_model(train_sequential, val_sequential)
 
         # Generate base predictions for meta-learner
@@ -468,6 +534,7 @@ class UltimateMetaEnsemble:
         return {
             'tree_models': tree_metrics,
             'transformer_models': transformer_metrics,
+            'foundation_models': foundation_metrics,
             'hybrid_model': hybrid_metrics,
             'meta_learner': meta_metrics
         }
@@ -495,6 +562,10 @@ class UltimateMetaEnsemble:
         # Save transformer models
         for name, model in self.transformer_models.items():
             model.save_model(str(output_path / f'{name}_ultimate.pth'))
+
+        # Save foundation models
+        for name, model in self.foundation_models.items():
+            model.save_model(str(output_path / f'{name}_ultimate_config.json'))
 
         # Save hybrid model
         if self.hybrid_model:
@@ -535,6 +606,7 @@ def main():
     parser.add_argument('--meta-learner', type=str, default='xgboost', choices=['xgboost', 'ridge'])
     parser.add_argument('--no-trees', action='store_true', help='Exclude tree models')
     parser.add_argument('--no-transformers', action='store_true', help='Exclude transformers')
+    parser.add_argument('--no-foundation', action='store_true', help='Exclude foundation models')
     parser.add_argument('--no-hybrid', action='store_true', help='Exclude hybrid model')
     parser.add_argument('--val-split', type=float, default=0.3)
 
@@ -558,6 +630,7 @@ def main():
         meta_learner_type=args.meta_learner,
         include_tree_models=not args.no_trees,
         include_transformers=not args.no_transformers,
+        include_foundation=not args.no_foundation,
         include_hybrid=not args.no_hybrid
     )
 

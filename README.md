@@ -4,7 +4,7 @@ A comprehensive collection of state-of-the-art time series forecasting models fo
 
 ## 📋 Overview
 
-This repository implements **8 state-of-the-art time series forecasting models**:
+This repository implements **10 state-of-the-art time series forecasting models**:
 
 ### Tree-Based Models
 1. **XGBoost** - Gradient boosting framework with tree-based models
@@ -14,14 +14,15 @@ This repository implements **8 state-of-the-art time series forecasting models**
 ### Statistical & Foundation Models
 4. **Prophet** - Facebook's time series forecasting tool
 5. **Chronos-2** - Amazon's universal time series forecasting foundation model
+6. **TimesFM** - Google's decoder-only transformer foundation model (pre-trained on 100B time points)
 
 ### 🆕 Transformer Models (SOTA)
-6. **PatchTST** (ICLR 2023) - Patch-based transformer, SOTA on long-term forecasting
-7. **iTransformer** (ICLR 2024) - Inverted transformer with variate-wise attention
-8. **TimesNet** (ICLR 2023) - 2D temporal variation modeling with FFT
+7. **PatchTST** (ICLR 2023) - Patch-based transformer, SOTA on long-term forecasting
+8. **iTransformer** (ICLR 2024) - Inverted transformer with variate-wise attention
+9. **TimesNet** (ICLR 2023) - 2D temporal variation modeling with FFT
 
 ### 🔥 Hybrid Models (Covariate Injection)
-9. **Chronos-PatchTST** - Combines specialist (PatchTST) + generalist (Chronos-2) with covariate injection
+10. **Chronos-PatchTST** - Combines specialist (PatchTST) + generalist (Chronos-2) with covariate injection
 
 ## 🏗️ Project Structure
 
@@ -34,9 +35,11 @@ kaggle_competition/
 │   ├── catboost_model.py         # CatBoost implementation
 │   ├── prophet_model.py          # Prophet implementation
 │   ├── chronos_model.py          # Chronos-2 implementation
+│   ├── timesfm_model.py          # 🆕 TimesFM foundation model
 │   ├── patchtst_model.py         # 🆕 PatchTST transformer (ICLR 2023)
 │   ├── itransformer_model.py     # 🆕 iTransformer (ICLR 2024)
-│   └── timesnet_model.py         # 🆕 TimesNet (ICLR 2023)
+│   ├── timesnet_model.py         # 🆕 TimesNet (ICLR 2023)
+│   └── hybrid_chronos_patchtst.py # 🔥 Hybrid model with covariate injection
 ├── utils/                         # Utility functions
 │   └── data_utils.py             # Data preprocessing utilities
 ├── scripts/                       # Training and prediction scripts
@@ -256,6 +259,52 @@ quantile_forecasts = model.predict_quantiles(
 )
 ```
 
+### TimesFM (Google's Foundation Model)
+
+**Strengths:**
+- Decoder-only transformer architecture (GPT-style for time series)
+- Pre-trained on 100 billion real-world time points
+- Zero-shot forecasting capability
+- Efficient patched-attention mechanism
+- Long context length (up to 512 points)
+
+**Available Model Sizes:**
+- `small`: ~256M dimension, 4 layers
+- `base`: ~512M dimension, 8 layers (default)
+- `large`: ~1024M dimension, 12 layers
+
+**Comparison with Chronos-2:**
+- **Chronos-2**: Encoder-only architecture (BERT-style)
+- **TimesFM**: Decoder-only architecture (GPT-style)
+- Both provide zero-shot forecasting with world knowledge
+
+**Usage:**
+```python
+from models import TimesFMTimeSeriesModel
+
+model = TimesFMTimeSeriesModel(
+    seq_len=512,        # Context length
+    pred_len=96,        # Forecast horizon
+    model_size='base',
+    device='cuda'
+)
+
+# TimesFM is pre-trained, just load it
+metrics = model.train(train_data, val_data)
+
+# Generate forecasts
+forecasts = model.predict(test_data)
+```
+
+**Installation:**
+```bash
+# Official TimesFM package (recommended)
+pip install timesfm
+
+# Or use the custom implementation provided
+# (automatically used as fallback if official package unavailable)
+```
+
 ## 🤖 Transformer Models (SOTA)
 
 ### **NEW!** State-of-the-art deep learning models for time series
@@ -446,7 +495,7 @@ results = hybrid.predict_with_uncertainty(
 
 ### **NEW!** The Most Comprehensive Ensemble Possible
 
-Combines ALL 9 models (tree + transformers + hybrid) with meta-learning:
+Combines ALL 10 models (tree + transformers + foundation + hybrid) with meta-learning:
 
 ```bash
 python scripts/ultimate_meta_ensemble.py \
@@ -471,11 +520,14 @@ Level 0B: Transformers (3 models)
 ├── iTransformer
 └── TimesNet
 
-Level 0C: Hybrid (1 model)
+Level 0C: Foundation Models (1 model)
+└── TimesFM
+
+Level 0D: Hybrid (1 model)
 └── Chronos-PatchTST
 
 Level 1: Meta-Learner
-└── Learns to combine ALL 7 predictions dynamically
+└── Learns to combine ALL 8 predictions dynamically
 ```
 
 #### Expected Performance
@@ -497,12 +549,13 @@ ensemble = UltimateMetaEnsemble(
     transformer_epochs=50,
     include_tree_models=True,
     include_transformers=True,
-    include_hybrid=True  # Include hybrid model
+    include_foundation=True,  # Include TimesFM
+    include_hybrid=True       # Include hybrid model
 )
 
 metrics = ensemble.train(data, target_col='target')
 
-# All 7 models work together!
+# All 8 models work together!
 predictions = ensemble.predict(X_tabular, sequential_data)
 ```
 

@@ -7,6 +7,7 @@ from .catboost_model import CatBoostTimeSeriesModel, CatBoostMultiStepForecaster
 # Statistical and foundation models
 from .prophet_model import ProphetTimeSeriesModel, ProphetEnsembleModel
 from .chronos_model import ChronosTimeSeriesModel, ChronosEnsemble, ChronosFineTuner
+from .timesfm_model import TimesFMModel, TimesFMTimeSeriesModel
 
 # Transformer models (SOTA for time series)
 from .patchtst_model import PatchTSTTimeSeriesModel
@@ -31,6 +32,8 @@ __all__ = [
     'ChronosTimeSeriesModel',
     'ChronosEnsemble',
     'ChronosFineTuner',
+    'TimesFMModel',
+    'TimesFMTimeSeriesModel',
     # Transformers
     'PatchTSTTimeSeriesModel',
     'iTransformerTimeSeriesModel',
