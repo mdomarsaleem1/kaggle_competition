@@ -230,6 +230,7 @@ __marimo__/
 # Project data and credentials
 /data/*
 data/*
+scripts/catboost*
 !/data/*/
 !/data/**/.gitkeep
 /conf/local/
