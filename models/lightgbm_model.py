@@ -8,6 +8,8 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error
 from typing import Dict, Optional, Tuple
 import json
 
+from utils.metrics import hull_sharpe_lightgbm
+
 
 class LightGBMTimeSeriesModel:
     """LightGBM model for time series forecasting"""
@@ -48,7 +50,8 @@ class LightGBMTimeSeriesModel:
     def train(self, X_train: np.ndarray, y_train: np.ndarray,
               X_val: Optional[np.ndarray] = None,
               y_val: Optional[np.ndarray] = None,
-              verbose: bool = True) -> Dict:
+              verbose: bool = True,
+              use_sharpe_metric: bool = False) -> Dict:
         """
         Train LightGBM model
 
@@ -80,10 +83,16 @@ class LightGBMTimeSeriesModel:
             eval_set.append((X_val, y_val))
             eval_names.append('valid')
 
+        eval_metric = None
+        if use_sharpe_metric:
+            # Add the custom Hull Sharpe feval alongside the default rmse
+            eval_metric = [hull_sharpe_lightgbm, 'rmse']
+
         self.model.fit(
             X_train, y_train,
             eval_set=eval_set,
             eval_names=eval_names,
+            eval_metric=eval_metric,
             callbacks=callbacks
         )
 

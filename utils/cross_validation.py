@@ -22,7 +22,9 @@ class TimeSeriesFold:
 def _sort_by_date(df: pd.DataFrame, date_col: Optional[str]) -> pd.DataFrame:
     if date_col and date_col in df.columns:
         sorted_df = df.copy()
-        sorted_df[date_col] = pd.to_datetime(sorted_df[date_col])
+        # ``date_id`` is a numeric ordering key in this competition. Avoid
+        # forcing a datetime conversion so we preserve the intended ordering.
+        sorted_df[date_col] = pd.to_numeric(sorted_df[date_col], errors="coerce")
         return sorted_df.sort_values(date_col).reset_index(drop=True)
     return df.reset_index(drop=True)
 

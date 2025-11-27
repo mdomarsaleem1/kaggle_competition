@@ -93,7 +93,7 @@ class ChronosTimeSeriesModel:
 
         # Generate forecasts
         forecast = self.pipeline.predict(
-            context=context_tensor,
+            context_tensor,
             prediction_length=prediction_length,
             num_samples=num_samples,
             temperature=temperature,
@@ -164,7 +164,7 @@ class ChronosTimeSeriesModel:
 
             # Generate forecasts
             batch_forecasts = self.pipeline.predict(
-                context=batch_tensors,
+                batch_tensors,
                 prediction_length=prediction_length,
                 num_samples=num_samples
             )

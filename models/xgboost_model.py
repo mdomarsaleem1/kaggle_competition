@@ -9,6 +9,8 @@ from typing import Dict, Optional, Tuple
 import joblib
 import json
 
+from utils.metrics import hull_sharpe_xgboost
+
 
 class XGBoostTimeSeriesModel:
     """XGBoost model for time series forecasting"""
@@ -46,7 +48,8 @@ class XGBoostTimeSeriesModel:
     def train(self, X_train: np.ndarray, y_train: np.ndarray,
               X_val: Optional[np.ndarray] = None,
               y_val: Optional[np.ndarray] = None,
-              verbose: bool = True) -> Dict:
+              verbose: bool = True,
+              use_sharpe_metric: bool = False) -> Dict:
         """
         Train XGBoost model
 
@@ -69,6 +72,7 @@ class XGBoostTimeSeriesModel:
         self.model.fit(
             X_train, y_train,
             eval_set=eval_set,
+            eval_metric=hull_sharpe_xgboost if use_sharpe_metric else 'rmse',
             verbose=verbose
         )
 

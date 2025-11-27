@@ -2,10 +2,8 @@
 # Tree-based models
 from .xgboost_model import XGBoostTimeSeriesModel, XGBoostMultiStepForecaster
 from .lightgbm_model import LightGBMTimeSeriesModel, LightGBMMultiStepForecaster
-from .catboost_model import CatBoostTimeSeriesModel, CatBoostMultiStepForecaster
 
 # Statistical and foundation models
-from .prophet_model import ProphetTimeSeriesModel, ProphetEnsembleModel
 from .chronos_model import ChronosTimeSeriesModel, ChronosEnsemble, ChronosFineTuner
 from .timesfm_model import TimesFMModel, TimesFMTimeSeriesModel
 
@@ -23,11 +21,6 @@ __all__ = [
     'XGBoostMultiStepForecaster',
     'LightGBMTimeSeriesModel',
     'LightGBMMultiStepForecaster',
-    'CatBoostTimeSeriesModel',
-    'CatBoostMultiStepForecaster',
-    # Statistical
-    'ProphetTimeSeriesModel',
-    'ProphetEnsembleModel',
     # Foundation
     'ChronosTimeSeriesModel',
     'ChronosEnsemble',
