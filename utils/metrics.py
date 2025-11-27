@@ -23,6 +23,7 @@ def hull_sharpe_ratio(
 
     y_true_arr = np.asarray(y_true, dtype=float)
     y_pred_arr = np.asarray(y_pred, dtype=float)
+    y_pred_arr = np.clip(y_pred_arr, 0, 2)
 
     # Fallback: simplified version with rf = 0, forward_returns = y_true
     if risk_free_rate is None or forward_returns is None:
@@ -110,17 +111,23 @@ def averaged_metric(scores):
     return float(np.mean(scores_arr))
 
 
-def hull_sharpe_lightgbm(preds, dataset):
-    """LightGBM ``feval`` callback implementing the competition Sharpe metric.
+def hull_sharpe_lightgbm(arg1, arg2):
+    """LightGBM ``feval`` implementing the competition Sharpe metric.
 
-    Note: This uses a simplified version of the metric for training monitoring,
-    assuming risk_free_rate=0 and using labels as forward_returns.
+    Supports both native LightGBM callback signature (preds, dataset) and
+    sklearn callback signature (y_true, preds).
     """
-    y_true = dataset.get_label()
+    # Detect calling convention
+    if hasattr(arg2, "get_label"):
+        preds = np.asarray(arg1, dtype=float)
+        y_true = np.asarray(arg2.get_label(), dtype=float)
+    else:
+        y_true = np.asarray(arg1, dtype=float)
+        preds = np.asarray(arg2, dtype=float)
+
     try:
         score = hull_sharpe_ratio(y_true, preds)
     except ValueError:
-        # If validation fails (e.g., division by zero), return a poor score
         score = -1_000_000.0
     return "hull_sharpe", score, True  # higher is better
 
